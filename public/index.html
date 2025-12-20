@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Management App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>User Management</h1>
+
+    <div class="cards-wrapper">
+
+        <!-- ================= SUNDAY SCHOOL ================= -->
+        <div class="container">
+
+            <h2 class="card-title">📘 Sunday School Management</h2>
+
+            <!-- LEVEL LIST -->
+            <div id="levelsPage" class="sub-card">
+                <h3>School Levels</h3>
+                <ul id="levelsList"></ul>
+                <button class="add-btn" onclick="addLevel()">+ Add Level</button>
+            </div>
+
+            <!-- LEVEL DETAILS PAGE -->
+            <div id="levelPage" style="display:none">
+
+                <button class="back-btn" onclick="goBack()">⬅ Back to Levels</button>
+                <h2 id="levelTitle"></h2>
+
+                <div class="sub-card">
+                    <h3>Teachers (<span id="teacherCount">0</span>)</h3>
+                    <ul id="teacherList"></ul>
+                    <button class="add-btn" onclick="addLevelItem('teacher')">+ Add Teacher</button>
+                </div>
+
+                <div class="sub-card">
+                    <h3>Students (<span id="studentCount">0</span>)</h3>
+                    <ul id="studentList"></ul>
+                    <button class="add-btn" onclick="addLevelItem('student')">+ Add Student</button>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- ================= CHURCH ================= -->
+        <div class="container">
+            <h2 class="card-title">
+                ⛪ Church of Christ Members(<span id="churchCount">0</span>)
+            </h2>
+            <ul id="churchList"></ul>
+            <button class="add-btn" onclick="addChurch()">+ Add Member</button>
+        </div>
+
+    </div>
+
+    <script>
+const apiUrl = 'http://localhost:4000/users';
+let currentLevel = null;
+
+/* ---------- LOAD LEVELS ---------- */
+async function loadLevels() {
+    const res = await fetch(`${apiUrl}/school_levels`);
+    const levels = await res.json();
+    const ul = document.getElementById('levelsList');
+    ul.innerHTML = '';
+
+    for (let i = 0; i < levels.length; i++) {
+        const level = levels[i];
+
+        const teachers = await (await fetch(`${apiUrl}/teacher?levelId=${level._id}`)).json();
+        const students = await (await fetch(`${apiUrl}/student?levelId=${level._id}`)).json();
+
+        const li = document.createElement('li');
+
+        const name = document.createElement('span');
+        name.textContent = `${i + 1}. ${level.name}`;
+        name.className = 'level-link';
+        name.onclick = () => openLevel(level);
+
+        const counts = document.createElement('span');
+        counts.className = 'level-counts';
+        counts.innerHTML = `👨‍🏫 ${teachers.length} &nbsp; 🎓 ${students.length}`;
+
+        const btn = document.createElement('button');
+        btn.innerHTML = '⋮';
+        btn.className = 'action-btn';
+
+        const menu = document.createElement('div');
+        menu.className = 'action-menu';
+
+        const edit = document.createElement('div');
+        edit.textContent = 'Edit';
+        edit.onclick = async () => {
+            const name = prompt('Rename level', level.name);
+            if (!name) return;
+            await update(level._id, name);
+        };
+
+        const del = document.createElement('div');
+        del.textContent = 'Delete';
+        del.onclick = async () => {
+            if (!confirm('Delete level?')) return;
+            await fetch(`${apiUrl}/${level._id}`, { method:'DELETE' });
+            loadLevels();
+        };
+
+        menu.append(edit, del);
+        btn.onclick = e => {
+            e.stopPropagation();
+            closeMenus();
+            menu.style.display = 'block';
+        };
+
+        li.append(name, counts, btn, menu);
+        ul.appendChild(li);
+    }
+}
+
+/* ---------- OPEN LEVEL ---------- */
+function openLevel(level) {
+    currentLevel = level;
+    document.getElementById('levelsPage').style.display = 'none';
+    document.getElementById('levelPage').style.display = 'block';
+    document.getElementById('levelTitle').textContent = `📘 ${level.name}`;
+    loadLevelItems();
+}
+
+/* ---------- BACK ---------- */
+function goBack() {
+    currentLevel = null;
+    document.getElementById('levelPage').style.display = 'none';
+    document.getElementById('levelsPage').style.display = 'block';
+}
+
+/* ---------- LOAD TEACHERS/STUDENTS ---------- */
+async function loadLevelItems() {
+    const teachers = await (await fetch(`${apiUrl}/teacher?levelId=${currentLevel._id}`)).json();
+    const students = await (await fetch(`${apiUrl}/student?levelId=${currentLevel._id}`)).json();
+
+    renderList('teacherList', teachers, 'teacher');
+    renderList('studentList', students, 'student');
+
+    document.getElementById('teacherCount').textContent = teachers.length;
+    document.getElementById('studentCount').textContent = students.length;
+}
+
+function renderList(id, items, type) {
+    const ul = document.getElementById(id);
+    ul.innerHTML = '';
+
+    items.forEach((item, i) => {
+        const li = document.createElement('li');
+
+        const span = document.createElement('span');
+        span.textContent = `${i + 1}. ${item.name}`;
+
+        const btn = document.createElement('button');
+        btn.innerHTML = '⋮';
+        btn.className = 'action-btn';
+
+        const menu = document.createElement('div');
+        menu.className = 'action-menu';
+
+        const edit = document.createElement('div');
+        edit.textContent = 'Edit';
+        edit.onclick = async () => {
+            const name = prompt('Edit name', item.name);
+            if (!name) return;
+            await update(item._id, name);
+            loadLevelItems();
+        };
+
+        const del = document.createElement('div');
+        del.textContent = 'Delete';
+        del.onclick = async () => {
+            await fetch(`${apiUrl}/${item._id}`, { method:'DELETE' });
+            loadLevelItems();
+        };
+
+        menu.append(edit, del);
+        btn.onclick = e => {
+            e.stopPropagation();
+            closeMenus();
+            menu.style.display = 'block';
+        };
+
+        li.append(span, btn, menu);
+        ul.appendChild(li);
+    });
+}
+
+/* ---------- ADD ---------- */
+async function addLevel() {
+    const name = prompt('Level name');
+    if (!name) return;
+    await fetch(apiUrl, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ name, category:'school_levels' })
+    });
+    loadLevels();
+}
+
+async function addLevelItem(type) {
+    const name = prompt(`Add ${type}`);
+    if (!name) return;
+    await fetch(apiUrl,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ name, category:type, levelId:currentLevel._id })
+    });
+    loadLevelItems();
+}
+
+async function addChurch() {
+    const name = prompt('Member name');
+    if (!name) return;
+    await fetch(apiUrl,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ name, category:'church_of_christ' })
+    });
+    loadChurch();
+}
+
+/* ---------- UPDATE ---------- */
+async function update(id, name) {
+    await fetch(`${apiUrl}/${id}`,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ name })
+    });
+    loadLevels();
+}
+
+/* ---------- CHURCH ---------- */
+async function loadChurch() {
+    const data = await (await fetch(`${apiUrl}/church_of_christ`)).json();
+    const ul = document.getElementById('churchList');
+    ul.innerHTML = '';
+    document.getElementById('churchCount').textContent = data.length;
+
+    data.forEach((m, i) => {
+        const li = document.createElement('li');
+        li.style.position = 'relative';
+
+        const span = document.createElement('span');
+        span.textContent = `${i + 1}. ${m.name}`;
+        span.style.flex = '1';
+
+        // 3-dot button
+        const btn = document.createElement('button');
+        btn.innerHTML = '⋮';
+        btn.className = 'action-btn';
+
+        // dropdown menu
+        const menu = document.createElement('div');
+        menu.className = 'action-menu';
+
+        // Edit
+        const edit = document.createElement('div');
+        edit.textContent = 'Edit';
+        edit.onclick = async () => {
+            const name = prompt('Edit member name', m.name);
+            if (!name) return;
+            await update(m._id, name);
+            loadChurch();
+        };
+
+        // Delete
+        const del = document.createElement('div');
+        del.textContent = 'Delete';
+        del.onclick = async () => {
+            if (!confirm('Delete member?')) return;
+            await fetch(`${apiUrl}/${m._id}`, { method: 'DELETE' });
+            loadChurch();
+        };
+
+        menu.append(edit, del);
+
+        btn.onclick = e => {
+            e.stopPropagation();
+            closeMenus();
+            menu.style.display = 'block';
+        };
+
+        li.append(span, btn, menu);
+        ul.appendChild(li);
+    });
+}
+
+
+function closeMenus(){
+    document.querySelectorAll('.action-menu').forEach(m=>m.style.display='none');
+}
+document.addEventListener('click', closeMenus);
+
+document.addEventListener('DOMContentLoaded',()=>{
+    loadLevels();
+    loadChurch();
+});
+    </script>
+
+</body>
+</html>

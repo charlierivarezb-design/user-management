@@ -1,0 +1,17 @@
+{
+  "name": "user-management",
+  "version": "1.0.0",
+  "description": "Starter project for User Management",
+  "main": "app.js",
+  "scripts": {
+    "start": "node server.js",
+    "console": "node app.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.22.1",
+    "mongoose": "^9.0.1",
+    "multer": "^2.0.2"
+  }
+}
