@@ -1,31 +1,34 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors'); // <--- import cors
+const cors = require('cors');
+const path = require('path'); // <--- needed for serving static files
 const app = express();
 
-// Enable CORS for all origins
+// Enable CORS
 app.use(cors());
 
-// Parse JSON bodies
+// Parse JSON
 app.use(express.json());
+
+// Serve static files from the 'public' folder
+app.use(express.static(path.join(__dirname, 'public')));
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://<username>:<password>@cluster0.fyabign.mongodb.net/user_management')
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error(err));
 
-// Simple User schema
+// User schema
 const userSchema = new mongoose.Schema({
     name: String,
     category: String,   // 'school_levels', 'teacher', 'student', 'church_of_christ'
-    levelId: String,    // optional for teachers/students
+    levelId: String,
 });
-
 const User = mongoose.model('User', userSchema);
 
-// ----------------- ROUTES -----------------
+// ----------------- API ROUTES -----------------
 
-// Get all users or filtered by category/level
+// Get all users or filtered
 app.get('/users', async (req, res) => {
     const { category, levelId } = req.query;
     const filter = {};
@@ -57,7 +60,11 @@ app.delete('/users/:id', async (req, res) => {
     res.json({ success: true });
 });
 
-
+// ----------------- CATCH-ALL ROUTE -----------------
+// For any route not matched above, serve index.html
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Start server
 const PORT = process.env.PORT || 4000;
