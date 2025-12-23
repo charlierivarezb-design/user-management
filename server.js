@@ -1,71 +1,92 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const path = require('path'); // <--- needed for serving static files
+const path = require('path');
 const app = express();
 
-// Enable CORS
+// ----------------- MIDDLEWARE -----------------
 app.use(cors());
-
-// Parse JSON
 app.use(express.json());
 
-// Serve static files from the 'public' folder
+// Serve frontend from public folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// MongoDB connection
-mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://<username>:<password>@cluster0.fyabign.mongodb.net/user_management')
-    .then(() => console.log('MongoDB connected'))
-    .catch(err => console.error(err));
+// ----------------- MONGODB -----------------
+const mongoUri = process.env.MONGO_URI;
+if (!mongoUri) {
+    console.error('Error: MONGO_URI environment variable not set.');
+    process.exit(1);
+}
 
-// User schema
+mongoose.connect(mongoUri)
+    .then(() => console.log('MongoDB connected'))
+    .catch(err => console.error('MongoDB connection error:', err));
+
+// ----------------- SCHEMA -----------------
 const userSchema = new mongoose.Schema({
     name: String,
     category: String,   // 'school_levels', 'teacher', 'student', 'church_of_christ'
-    levelId: String,
+    levelId: String,    // for teacher/student
 });
+
 const User = mongoose.model('User', userSchema);
 
 // ----------------- API ROUTES -----------------
 
-// Get all users or filtered
+// GET all users (with optional filtering)
 app.get('/users', async (req, res) => {
-    const { category, levelId } = req.query;
-    const filter = {};
-    if (category) filter.category = category;
-    if (levelId) filter.levelId = levelId;
-    const users = await User.find(filter);
-    res.json(users);
+    try {
+        const { category, levelId } = req.query;
+        const filter = {};
+        if (category) filter.category = category;
+        if (levelId) filter.levelId = levelId;
+        const users = await User.find(filter);
+        res.json(users);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Add user
+// POST add user
 app.post('/users', async (req, res) => {
-    const { name, category, levelId } = req.body;
-    if (!name || !category) return res.status(400).json({ error: 'Name and category required' });
-    const user = new User({ name, category, levelId });
-    await user.save();
-    res.json(user);
+    try {
+        const { name, category, levelId } = req.body;
+        if (!name || !category) return res.status(400).json({ error: 'Name and category required' });
+        const user = new User({ name, category, levelId });
+        await user.save();
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Update user
+// PUT update user
 app.put('/users/:id', async (req, res) => {
-    const { name } = req.body;
-    const user = await User.findByIdAndUpdate(req.params.id, { name }, { new: true });
-    res.json(user);
+    try {
+        const { name } = req.body;
+        const user = await User.findByIdAndUpdate(req.params.id, { name }, { new: true });
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Delete user
+// DELETE user
 app.delete('/users/:id', async (req, res) => {
-    await User.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
+    try {
+        await User.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ----------------- CATCH-ALL ROUTE -----------------
-// For any route not matched above, serve index.html
+// Serve index.html for any other route
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start server
+// ----------------- START SERVER -----------------
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
