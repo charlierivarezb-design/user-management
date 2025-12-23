@@ -60,62 +60,86 @@
 const apiUrl = 'https://user-management.onrender.com/users';
 let currentLevel = null;
 
+/* ---------- SHOW ALERT ---------- */
+function showAlert(message, type = 'error') {
+    alert(message); // simple, can be replaced with a fancier notification div
+}
+
 /* ---------- LOAD LEVELS ---------- */
 async function loadLevels() {
-    const res = await fetch(`${apiUrl}/school_levels`);
-    const levels = await res.json();
-    const ul = document.getElementById('levelsList');
-    ul.innerHTML = '';
+    try {
+        const res = await fetch(`${apiUrl}?category=school_levels`);
+        if (!res.ok) throw new Error('Failed to fetch levels');
+        const levels = await res.json();
 
-    for (let i = 0; i < levels.length; i++) {
-        const level = levels[i];
+        const ul = document.getElementById('levelsList');
+        ul.innerHTML = '';
 
-        const teachers = await (await fetch(`${apiUrl}/teacher?levelId=${level._id}`)).json();
-        const students = await (await fetch(`${apiUrl}/student?levelId=${level._id}`)).json();
+        for (let i = 0; i < levels.length; i++) {
+            const level = levels[i];
 
-        const li = document.createElement('li');
+            const teachersRes = await fetch(`${apiUrl}?category=teacher&levelId=${level._id}`);
+            const studentsRes = await fetch(`${apiUrl}?category=student&levelId=${level._id}`);
+            if (!teachersRes.ok || !studentsRes.ok) throw new Error('Failed to fetch level items');
 
-        const name = document.createElement('span');
-        name.textContent = `${i + 1}. ${level.name}`;
-        name.className = 'level-link';
-        name.onclick = () => openLevel(level);
+            const teachers = await teachersRes.json();
+            const students = await studentsRes.json();
 
-        const counts = document.createElement('span');
-        counts.className = 'level-counts';
-        counts.innerHTML = `👨‍🏫 ${teachers.length} &nbsp; 🎓 ${students.length}`;
+            const li = document.createElement('li');
 
-        const btn = document.createElement('button');
-        btn.innerHTML = '⋮';
-        btn.className = 'action-btn';
+            const name = document.createElement('span');
+            name.textContent = `${i + 1}. ${level.name}`;
+            name.className = 'level-link';
+            name.onclick = () => openLevel(level);
 
-        const menu = document.createElement('div');
-        menu.className = 'action-menu';
+            const counts = document.createElement('span');
+            counts.className = 'level-counts';
+            counts.innerHTML = `👨‍🏫 ${teachers.length} &nbsp; 🎓 ${students.length}`;
 
-        const edit = document.createElement('div');
-        edit.textContent = 'Edit';
-        edit.onclick = async () => {
-            const name = prompt('Rename level', level.name);
-            if (!name) return;
-            await update(level._id, name);
-        };
+            const btn = document.createElement('button');
+            btn.innerHTML = '⋮';
+            btn.className = 'action-btn';
 
-        const del = document.createElement('div');
-        del.textContent = 'Delete';
-        del.onclick = async () => {
-            if (!confirm('Delete level?')) return;
-            await fetch(`${apiUrl}/${level._id}`, { method:'DELETE' });
-            loadLevels();
-        };
+            const menu = document.createElement('div');
+            menu.className = 'action-menu';
 
-        menu.append(edit, del);
-        btn.onclick = e => {
-            e.stopPropagation();
-            closeMenus();
-            menu.style.display = 'block';
-        };
+            const edit = document.createElement('div');
+            edit.textContent = 'Edit';
+            edit.onclick = async () => {
+                const newName = prompt('Rename level', level.name);
+                if (!newName) return;
+                try {
+                    await update(level._id, newName);
+                } catch (err) {
+                    showAlert(err.message);
+                }
+            };
 
-        li.append(name, counts, btn, menu);
-        ul.appendChild(li);
+            const del = document.createElement('div');
+            del.textContent = 'Delete';
+            del.onclick = async () => {
+                if (!confirm('Delete level?')) return;
+                try {
+                    const delRes = await fetch(`${apiUrl}/${level._id}`, { method:'DELETE' });
+                    if (!delRes.ok) throw new Error('Failed to delete');
+                    loadLevels();
+                } catch (err) {
+                    showAlert(err.message);
+                }
+            };
+
+            menu.append(edit, del);
+            btn.onclick = e => {
+                e.stopPropagation();
+                closeMenus();
+                menu.style.display = 'block';
+            };
+
+            li.append(name, counts, btn, menu);
+            ul.appendChild(li);
+        }
+    } catch (err) {
+        showAlert(err.message);
     }
 }
 
@@ -137,14 +161,22 @@ function goBack() {
 
 /* ---------- LOAD TEACHERS/STUDENTS ---------- */
 async function loadLevelItems() {
-    const teachers = await (await fetch(`${apiUrl}/teacher?levelId=${currentLevel._id}`)).json();
-    const students = await (await fetch(`${apiUrl}/student?levelId=${currentLevel._id}`)).json();
+    try {
+        const teachersRes = await fetch(`${apiUrl}?category=teacher&levelId=${currentLevel._id}`);
+        const studentsRes = await fetch(`${apiUrl}?category=student&levelId=${currentLevel._id}`);
+        if (!teachersRes.ok || !studentsRes.ok) throw new Error('Failed to fetch level items');
 
-    renderList('teacherList', teachers, 'teacher');
-    renderList('studentList', students, 'student');
+        const teachers = await teachersRes.json();
+        const students = await studentsRes.json();
 
-    document.getElementById('teacherCount').textContent = teachers.length;
-    document.getElementById('studentCount').textContent = students.length;
+        renderList('teacherList', teachers, 'teacher');
+        renderList('studentList', students, 'student');
+
+        document.getElementById('teacherCount').textContent = teachers.length;
+        document.getElementById('studentCount').textContent = students.length;
+    } catch (err) {
+        showAlert(err.message);
+    }
 }
 
 function renderList(id, items, type) {
@@ -167,17 +199,27 @@ function renderList(id, items, type) {
         const edit = document.createElement('div');
         edit.textContent = 'Edit';
         edit.onclick = async () => {
-            const name = prompt('Edit name', item.name);
-            if (!name) return;
-            await update(item._id, name);
-            loadLevelItems();
+            const newName = prompt('Edit name', item.name);
+            if (!newName) return;
+            try {
+                await update(item._id, newName);
+                loadLevelItems();
+            } catch (err) {
+                showAlert(err.message);
+            }
         };
 
         const del = document.createElement('div');
         del.textContent = 'Delete';
         del.onclick = async () => {
-            await fetch(`${apiUrl}/${item._id}`, { method:'DELETE' });
-            loadLevelItems();
+            if (!confirm('Delete?')) return;
+            try {
+                const delRes = await fetch(`${apiUrl}/${item._id}`, { method:'DELETE' });
+                if (!delRes.ok) throw new Error('Failed to delete');
+                loadLevelItems();
+            } catch (err) {
+                showAlert(err.message);
+            }
         };
 
         menu.append(edit, del);
@@ -196,109 +238,140 @@ function renderList(id, items, type) {
 async function addLevel() {
     const name = prompt('Level name');
     if (!name) return;
-    await fetch(apiUrl, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ name, category:'school_levels' })
-    });
-    loadLevels();
+    try {
+        const res = await fetch(apiUrl, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ name, category:'school_levels' })
+        });
+        if (!res.ok) throw new Error('Failed to add level');
+        loadLevels();
+    } catch (err) {
+        showAlert(err.message);
+    }
 }
 
 async function addLevelItem(type) {
+    if (!currentLevel) return showAlert('Select a level first');
     const name = prompt(`Add ${type}`);
     if (!name) return;
-    await fetch(apiUrl,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ name, category:type, levelId:currentLevel._id })
-    });
-    loadLevelItems();
+    try {
+        const res = await fetch(apiUrl,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ name, category:type, levelId:currentLevel._id })
+        });
+        if (!res.ok) throw new Error('Failed to add');
+        loadLevelItems();
+    } catch (err) {
+        showAlert(err.message);
+    }
 }
 
 async function addChurch() {
     const name = prompt('Member name');
     if (!name) return;
-    await fetch(apiUrl,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ name, category:'church_of_christ' })
-    });
-    loadChurch();
+    try {
+        const res = await fetch(apiUrl,{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({ name, category:'church_of_christ' })
+        });
+        if (!res.ok) throw new Error('Failed to add church member');
+        loadChurch();
+    } catch (err) {
+        showAlert(err.message);
+    }
 }
 
 /* ---------- UPDATE ---------- */
 async function update(id, name) {
-    await fetch(`${apiUrl}/${id}`,{
+    const res = await fetch(`${apiUrl}/${id}`,{
         method:'PUT',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({ name })
     });
+    if (!res.ok) throw new Error('Failed to update');
+    // refresh levels or church depending on type
     loadLevels();
+    if (currentLevel) loadLevelItems();
+    loadChurch();
 }
 
 /* ---------- CHURCH ---------- */
 async function loadChurch() {
-    const data = await (await fetch(`${apiUrl}/church_of_christ`)).json();
-    const ul = document.getElementById('churchList');
-    ul.innerHTML = '';
-    document.getElementById('churchCount').textContent = data.length;
+    try {
+        const res = await fetch(`${apiUrl}?category=church_of_christ`);
+        if (!res.ok) throw new Error('Failed to fetch church members');
+        const data = await res.json();
 
-    data.forEach((m, i) => {
-        const li = document.createElement('li');
-        li.style.position = 'relative';
+        const ul = document.getElementById('churchList');
+        ul.innerHTML = '';
+        document.getElementById('churchCount').textContent = data.length;
 
-        const span = document.createElement('span');
-        span.textContent = `${i + 1}. ${m.name}`;
-        span.style.flex = '1';
+        data.forEach((m, i) => {
+            const li = document.createElement('li');
+            li.style.position = 'relative';
 
-        // 3-dot button
-        const btn = document.createElement('button');
-        btn.innerHTML = '⋮';
-        btn.className = 'action-btn';
+            const span = document.createElement('span');
+            span.textContent = `${i+1}. ${m.name}`;
+            span.style.flex = '1';
 
-        // dropdown menu
-        const menu = document.createElement('div');
-        menu.className = 'action-menu';
+            const btn = document.createElement('button');
+            btn.innerHTML = '⋮';
+            btn.className = 'action-btn';
 
-        // Edit
-        const edit = document.createElement('div');
-        edit.textContent = 'Edit';
-        edit.onclick = async () => {
-            const name = prompt('Edit member name', m.name);
-            if (!name) return;
-            await update(m._id, name);
-            loadChurch();
-        };
+            const menu = document.createElement('div');
+            menu.className = 'action-menu';
 
-        // Delete
-        const del = document.createElement('div');
-        del.textContent = 'Delete';
-        del.onclick = async () => {
-            if (!confirm('Delete member?')) return;
-            await fetch(`${apiUrl}/${m._id}`, { method: 'DELETE' });
-            loadChurch();
-        };
+            const edit = document.createElement('div');
+            edit.textContent = 'Edit';
+            edit.onclick = async () => {
+                const newName = prompt('Edit member name', m.name);
+                if (!newName) return;
+                try {
+                    await update(m._id, newName);
+                    loadChurch();
+                } catch (err) {
+                    showAlert(err.message);
+                }
+            };
 
-        menu.append(edit, del);
+            const del = document.createElement('div');
+            del.textContent = 'Delete';
+            del.onclick = async () => {
+                if (!confirm('Delete member?')) return;
+                try {
+                    const res = await fetch(`${apiUrl}/${m._id}`, { method:'DELETE' });
+                    if (!res.ok) throw new Error('Failed to delete member');
+                    loadChurch();
+                } catch (err) {
+                    showAlert(err.message);
+                }
+            };
 
-        btn.onclick = e => {
-            e.stopPropagation();
-            closeMenus();
-            menu.style.display = 'block';
-        };
+            menu.append(edit, del);
+            btn.onclick = e => {
+                e.stopPropagation();
+                closeMenus();
+                menu.style.display = 'block';
+            };
 
-        li.append(span, btn, menu);
-        ul.appendChild(li);
-    });
+            li.append(span, btn, menu);
+            ul.appendChild(li);
+        });
+    } catch (err) {
+        showAlert(err.message);
+    }
 }
 
-
+/* ---------- UTILS ---------- */
 function closeMenus(){
     document.querySelectorAll('.action-menu').forEach(m=>m.style.display='none');
 }
 document.addEventListener('click', closeMenus);
 
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', ()=>{
     loadLevels();
     loadChurch();
 });
